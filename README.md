@@ -23,7 +23,7 @@ To detect Active Directory Password Spraying, make sure to setup centralized log
 
 ```
 Audit Kerberos Authentication Service (Success & Failure). 
-This policy will generate Windows Security Log Event ID 4771 (Kerberos pre-authentication failed),
+This policy will generate Windows Security Log Event ID 4771 (Kerberos pre-authentication failed).
 ```
 
 More info can be found in the following post by Sean Metcalf:
