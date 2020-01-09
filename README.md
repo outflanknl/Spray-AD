@@ -1,5 +1,7 @@
 # Spray-AD, a Cobalt Strike tool to perform a fast Kerberos password spraying attack against Active Directory.
-This tool can help Red and Blue teams to audit Active Directory useraccounts for weak, well known or easy guessable passwords.
+This tool can help Red and Blue teams to audit Active Directory useraccounts for weak, well known or easy guessable passwords and can help Blue teams to assess whether these events are properly logged and acted upon.
+
+When this tool is executed, it generates event IDs 4771 (Kerberos pre-authentication failed) instead of 4625 (logon failure). This event is not audited by default on domain controllers and therefore this tool might help evading detection while password spraying.
 
 ## Usage:
 
