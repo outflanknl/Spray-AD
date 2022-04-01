@@ -8,6 +8,8 @@ When this tool is executed, it generates event IDs 4771 (Kerberos pre-authentica
 ```
 Download the Spray-AD folder and load the Spray-AD.cna script within the Cobalt Strike Script Manager.
 Syntax within beacon context: Spray-AD [password to test]
+To limit the possibility of user lockout use the -Limit flag, By default the limit of BadPwdCount is 4. To ignore the BadPwdCount set the flag to 0: 
+Spray-AD [password to test] -Limit <max BadPwdCount>
 ```
 
 ```

